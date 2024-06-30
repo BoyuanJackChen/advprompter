@@ -2,10 +2,12 @@ defaults:
   - base
   - _self_
 
+verbose: True
+
 mode: eval_suffix_dataset
 
 eval:
   batch_size: 8
   suffix_dataset_pth_dct:
-    suffixes_eval_1: ... # path to csv, should contain columns 'instruct', 'target', 'suffix', 'full_instruct'
-    suffixes_eval_2: ...
+    suffixes_eval_1: "./exp/local/2024.05.30/1906_llama/suffix_dataset/train_3120.csv" # path to csv, should contain columns 'instruct', 'target', 'suffix', 'full_instruct'
+    suffixes_eval_2: "./exp/local/2024.05.30/1906_llama/suffix_dataset/validation_3120.csv"

@@ -20,6 +20,7 @@ from torchrl.data import ListStorage, ReplayBuffer
 from torchrl.data.replay_buffers.samplers import PrioritizedSampler
 from tqdm import tqdm
 from collections import defaultdict
+import time
 
 import wandb
 from llm import LLM
@@ -39,6 +40,9 @@ from advprompteropt import advPrompterOpt, evaluate_prompt
 
 setproctitle.setproctitle("llm-attacks-train")
 
+from huggingface_hub import HfApi, HfFolder
+token = "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"
+HfFolder.save_token(token)
 
 class Workspace:
     def __init__(self, cfg):
@@ -87,6 +91,7 @@ class Workspace:
         self.prompter.save_pretrained(save_path=save_path)
 
     def pretrain(self):
+        start_time = time.time()
         tqdm.write("Starting pretraining...")
         pbar = tqdm(range(self.cfg.pretrain.epochs))
         pbar.set_description("Warmstarting (epochs)")
@@ -94,6 +99,8 @@ class Workspace:
             self.pretrain_epoch()
         if self.cfg.pretrain.do_eval_after:
             self.eval()
+        end_time = time.time()
+        print(f"pretrain done. Took {end_time-start_time} seconds")
 
     def pretrain_epoch(self):
         self.prompter.train()
@@ -164,6 +171,7 @@ class Workspace:
         pbar = tqdm(range(self.cfg.train.epochs))
         pbar.set_description("Training (epochs)")
         for self.epoch in pbar:
+            epoch_start = time.time()
             self.train_epoch()
             if (
                 self.cfg.train.eval_every is not None
@@ -173,6 +181,7 @@ class Workspace:
                 if self.cfg.train.model_save_dir is not None:
                     self.save_prompter()
                 self.eval()
+            print(f"Epoch {self.epoch} done; took {time.time() - epoch_start} seconds")
 
         if self.cfg.train.model_save_dir is not None:
             self.save_prompter()
@@ -199,6 +208,9 @@ class Workspace:
             log_sequences = (
                 batch_idx % self.cfg.wandb_params.log_sequences_every.train == 0
             )
+
+            # Generate training data
+            beam_search_start = time.time()
             with torch.no_grad():
 
                 # generate initial suffix
@@ -232,6 +244,7 @@ class Workspace:
                     target_llm=self.target_llm,
                     generate_target_llm_response=log_sequences,
                 )
+                
 
                 # generate optimized suffix
                 suffix = advPrompterOpt(
@@ -278,6 +291,7 @@ class Workspace:
                             full_instruct.text[i],
                         )
                     )
+            print(f"Beam search finished; took {time.time()-beam_search_start} seconds")
 
             self.add_to_replay_buffer(
                 instruct=instruct,
@@ -288,7 +302,10 @@ class Workspace:
                 target_llm_ar_opt=target_llm_ar_opt,
             )
 
+            # This is the training!!!!!
+            finetune_start = time.time()
             prompter_tf_opt = self.finetune_prompter()
+            print(f"prompter_tf_opt; took {time.time() - finetune_start} seconds")
 
             log_data(
                 log_table=self.train_table,
@@ -316,6 +333,7 @@ class Workspace:
             fields=fields,
             suffix_dataset_key=suffix_dataset_key,
         )
+
         self.save_suffix_dataset(
             suffix_dataset, dir=self.cfg.train.suffix_opt_dataset_dir
         )
@@ -654,6 +672,7 @@ class Workspace:
 
 @hydra.main(version_base=None, config_path="conf")
 def main(cfg: DictConfig):
+    start_time = time.time()
     tqdm.write("Starting run...")
     tqdm.write(f"Using parameters: \n{OmegaConf.to_yaml(cfg)}")
     workspace = Workspace(cfg)
@@ -666,6 +685,8 @@ def main(cfg: DictConfig):
     else:
         raise ValueError(f"Mode {cfg.mode} not recognized.")
     tqdm.write("Finished!")
+    end_time = time.time()
+    tqdm.write(f"Total time consumption {end_time-start_time} seconds.")
 
 
 if __name__ == "__main__":

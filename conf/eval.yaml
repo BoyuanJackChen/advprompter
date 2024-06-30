@@ -2,11 +2,13 @@ defaults:
   - base
   - _self_
 
+verbose: True
+
 mode: eval
 
 eval:
   batch_size: 8
-  num_trials: 3 # number of sampling performed per iter, evaluate ASR@k (k=num_trials * len(max_new_tokens_list))
+  num_trials: 1 # number of sampling performed per iter, evaluate ASR@k (k=num_trials * len(max_new_tokens_list))
   prompter:
     max_new_tokens_list:
       - 30
